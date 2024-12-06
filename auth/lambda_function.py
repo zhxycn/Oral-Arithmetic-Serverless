@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import os
 import random
 import time
 import uuid
@@ -13,6 +14,9 @@ AUTH_TABLE = "Oral-Arithmetic-Auth"
 SESSION_TABLE = "Oral-Arithmetic-Session"
 USER_TABLE = "Oral-Arithmetic-User"
 QUIZ_TABLE = "Oral-Arithmetic-Quiz"
+
+# 环境变量
+FRONT_END_URL = os.environ["FRONT_END_URL"]
 
 # 初始化 DynamoDB 资源
 dynamodb = boto3.resource("dynamodb")
@@ -37,7 +41,7 @@ def register(email: str, nickname: str, password: str) -> None:
 
     # 检查邮箱是否存在
     if auth_table.get_item(Key={"email": email}).get("Item"):
-        raise ValueError("Email already exists")
+        raise ValueError("邮箱已存在")
 
     # 对密码进行加密
     hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
@@ -73,7 +77,7 @@ def login(email: str, password: str) -> [str, int]:
     """
     # 检查参数是否为空
     if not email or not password:
-        raise ValueError("Missing parameter")
+        raise ValueError("缺少参数")
 
     # 定义数据表
     auth_table = dynamodb.Table(AUTH_TABLE)
@@ -86,7 +90,7 @@ def login(email: str, password: str) -> [str, int]:
     if not data or not bcrypt.checkpw(
         password.encode("utf-8"), data["password"].encode("utf-8")
     ):
-        raise ValueError("Invalid Email or Password")
+        raise ValueError("邮箱或密码错误")
 
     uid = data.get("uid")
 
@@ -108,13 +112,35 @@ def login(email: str, password: str) -> [str, int]:
 
 
 def lambda_handler(event, context):
+    # 获取 HTTP 请求方法
+    http_method = event["requestContext"]["http"]["method"]
+
+    # 处理 OPTIONS 请求
+    if http_method == "OPTIONS":
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": FRONT_END_URL,
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "content-type",
+                "Access-Control-Allow-Credentials": True,
+            },
+            "body": "",
+        }
+
     # 获取事件类型
     try:
         event_type = event["queryStringParameters"]["type"]
     except KeyError:
         return {
             "statusCode": 400,
-            "body": json.dumps({"message": "Missing parameter"}),
+            "headers": {
+                "Access-Control-Allow-Origin": FRONT_END_URL,
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "content-type",
+                "Access-Control-Allow-Credentials": True,
+            },
+            "body": json.dumps({"message": "缺少参数"}),
         }
 
     # 解析请求体
@@ -122,7 +148,7 @@ def lambda_handler(event, context):
         (
             json.loads(base64.b64decode(event["body"]).decode("utf-8"))
             if event.get("isBase64Encoded")
-            else event["body"]
+            else json.loads(event["body"])
         )
         if "body" in event
         else None
@@ -135,9 +161,27 @@ def lambda_handler(event, context):
     if event_type == "register":
         try:
             register(email, nickname, password)
-            return {"statusCode": 201, "body": "Success"}
+            return {
+                "statusCode": 201,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": "Success",
+            }
         except ValueError as e:
-            return {"statusCode": 400, "body": json.dumps({"message": str(e)})}
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": str(e)}),
+            }
 
     # 登录
     if event_type == "login":
@@ -146,11 +190,33 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 201,
                 "headers": {
-                    "Set-Cookie": f"session={session}; Path=/; Max-Age={expiration}; Secure"
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                    "Set-Cookie": f"session={session}; Path=/; Max-Age={expiration}; Secure; SameSite=None",
                 },
                 "body": "Cookie Set",
             }
         except ValueError as e:
-            return {"statusCode": 400, "body": json.dumps({"message": str(e)})}
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": str(e)}),
+            }
 
-    return {"statusCode": 400, "body": ({"message": "Invalid parameter"})}
+    return {
+        "statusCode": 400,
+        "headers": {
+            "Access-Control-Allow-Origin": FRONT_END_URL,
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "content-type",
+            "Access-Control-Allow-Credentials": True,
+        },
+        "body": ({"message": "参数错误"}),
+    }
