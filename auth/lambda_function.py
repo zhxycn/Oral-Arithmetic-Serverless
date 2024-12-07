@@ -62,7 +62,16 @@ def register(email: str, nickname: str, password: str) -> None:
         "uid": uid,
     }
     auth_table.put_item(Item=auth_item)
-    user_item = {"uid": uid, "email": email, "nickname": nickname}
+    user_item = {
+        "uid": uid,
+        "email": email,
+        "nickname": nickname,
+        "total": 0,
+        "competition_total": 0,
+        "competition_win": 0,
+        "qid": [],
+        "mistake": [],
+    }
     user_table.put_item(Item=user_item)
 
 
@@ -82,17 +91,23 @@ def login(email: str, password: str) -> [str, int]:
     # 定义数据表
     auth_table = dynamodb.Table(AUTH_TABLE)
     session_table = dynamodb.Table(SESSION_TABLE)
+    user_table = dynamodb.Table(USER_TABLE)
 
-    # 获取用户数据
-    data = auth_table.get_item(Key={"email": email}).get("Item")
+    # 通过邮箱获取用户验证数据
+    auth_data = auth_table.get_item(Key={"email": email}).get("Item")
 
     # 验证用户名和密码
-    if not data or not bcrypt.checkpw(
-        password.encode("utf-8"), data["password"].encode("utf-8")
+    if not auth_data or not bcrypt.checkpw(
+        password.encode("utf-8"), auth_data["password"].encode("utf-8")
     ):
         raise ValueError("邮箱或密码错误")
 
-    uid = data.get("uid")
+    uid = auth_data.get("uid")
+
+    # 通过 UID 获取用户数据
+    user_data = user_table.get_item(Key={"uid": uid}).get("Item")
+
+    nickname = user_data.get("nickname")
 
     # 通过 UID 与时间戳和随机数生成初始 session
     timestamp = int(time.time())
@@ -108,7 +123,7 @@ def login(email: str, password: str) -> [str, int]:
         Item={"session": session, "uid": uid, "expiration": timestamp + expiration}
     )
 
-    return session, expiration
+    return session, expiration, nickname
 
 
 def lambda_handler(event, context):
@@ -169,7 +184,7 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Headers": "content-type",
                     "Access-Control-Allow-Credentials": True,
                 },
-                "body": "Success",
+                "body": json.dumps({"message": "Success"}),
             }
         except ValueError as e:
             return {
@@ -186,7 +201,7 @@ def lambda_handler(event, context):
     # 登录
     if event_type == "login":
         try:
-            session, expiration = login(email, password)
+            session, expiration, nickname = login(email, password)
             return {
                 "statusCode": 201,
                 "headers": {
@@ -196,7 +211,7 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Credentials": True,
                     "Set-Cookie": f"session={session}; Path=/; Max-Age={expiration}; Secure; SameSite=None",
                 },
-                "body": "Cookie Set",
+                "body": json.dumps({"message": "Cookie Set", "nickname": nickname}),
             }
         except ValueError as e:
             return {
