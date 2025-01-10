@@ -113,11 +113,12 @@ def save_quiz(
     }
     quiz_table.put_item(Item=quiz_item)
 
-    # 更新用户数据，将 qid 添加到 qid 列表中
+    # 更新用户数据，将 qid 添加到 qid 列表中，并使总场数 +1
     user_table.update_item(
         Key={"uid": uid},
-        UpdateExpression="SET qid = list_append(if_not_exists(qid, :empty_list), :qid)",
-        ExpressionAttributeValues={":qid": [qid], ":empty_list": []},
+        UpdateExpression="SET qid = list_append(if_not_exists(qid, :empty_list), :qid), #total = #total + :increment",
+        ExpressionAttributeNames={"#total": "total"},
+        ExpressionAttributeValues={":qid": [qid], ":empty_list": [], ":increment": 1},
     )
 
 
