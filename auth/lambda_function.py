@@ -82,7 +82,7 @@ def login(email: str, password: str) -> [str, int]:
     :param email: 邮箱
     :param password: 密码
     :return: 用于 Cookie 的 session 值和有效期
-    :raise ValueError: 参数为空或邮箱密码错误。
+    :raise ValueError: 参数为空或邮箱密码错误
     """
     # 检查参数是否为空
     if not email or not password:
@@ -211,7 +211,14 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Credentials": True,
                     "Set-Cookie": f"session={session}; Path=/; Max-Age={expiration}; Secure; SameSite=None",
                 },
-                "body": json.dumps({"message": "Cookie Set", "nickname": nickname}),
+                "body": json.dumps(
+                    {
+                        "message": "Cookie Set",
+                        "session": session,
+                        "expiration": expiration,
+                        "nickname": nickname,
+                    }
+                ),
             }
         except ValueError as e:
             return {
