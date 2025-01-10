@@ -66,6 +66,7 @@ def register(email: str, nickname: str, password: str) -> None:
         "uid": uid,
         "email": email,
         "nickname": nickname,
+        "avatar": "",
         "total": 0,
         "competition_total": 0,
         "competition_win": 0,
