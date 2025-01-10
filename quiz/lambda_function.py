@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import time
 import uuid
 
 import boto3
@@ -39,6 +40,9 @@ def get_uid_from_cookie(cookie: dict) -> int:
     # 获取 UID
     data = session_table.get_item(Key={"session": session})
     if "Item" in data:
+        expiration = data["Item"].get("expiration")
+        if expiration < int(time.time()):
+            raise ValueError("Session expired")
         return data["Item"].get("uid")
     else:
         raise ValueError("Missing parameter")
