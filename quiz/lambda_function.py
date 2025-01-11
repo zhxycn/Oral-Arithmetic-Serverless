@@ -122,6 +122,39 @@ def save_quiz(
     )
 
 
+def save_mistake(
+    uid: int, question: str, user_answer: str, correct_answer: str
+) -> None:
+    """
+    保存错题
+
+    :param uid: 用户 ID
+    :param question: 题目
+    :param user_answer: 用户答案
+    :param correct_answer: 正确答案
+    """
+    # 检查参数是否为空
+    if not uid or not question or not user_answer or not correct_answer:
+        raise ValueError("Missing parameter")
+
+    # 定义数据表
+    user_table = dynamodb.Table(USER_TABLE)
+
+    # 错题记录
+    mistake = {
+        "question": question,
+        "userAnswer": user_answer,
+        "correctAnswer": correct_answer,
+    }
+
+    # 更新用户数据，将错题添加到 mistake 列表中
+    user_table.update_item(
+        Key={"uid": uid},
+        UpdateExpression="SET mistake = list_append(if_not_exists(mistake, :empty_list), :mistake)",
+        ExpressionAttributeValues={":mistake": [mistake], ":empty_list": []},
+    )
+
+
 def lambda_handler(event, context):
     # 获取 HTTP 请求方法
     http_method = event["requestContext"]["http"]["method"]
@@ -189,6 +222,37 @@ def lambda_handler(event, context):
                 is_competition,
                 allow_competition,
             )
+            return {
+                "statusCode": 201,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": "Success"}),
+            }
+        except ValueError as e:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": str(e)}),
+            }
+
+    # 保存错题
+    if event_type == "save_mistake":
+        try:
+            uid = get_uid_from_cookie(event["cookies"])
+            question = body.get("question", None)
+            user_answer = body.get("userAnswer", None)
+            correct_answer = body.get("correctAnswer", None)
+
+            save_mistake(uid, question, user_answer, correct_answer)
             return {
                 "statusCode": 201,
                 "headers": {
