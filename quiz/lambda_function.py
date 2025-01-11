@@ -155,6 +155,28 @@ def save_mistake(
     )
 
 
+def get_mistakes(uid: int) -> list:
+    """
+    获取错题
+
+    :param uid: 用户 ID
+    :return: 错题列表
+    """
+    # 检查参数是否为空
+    if not uid:
+        raise ValueError("Missing parameter")
+
+    # 定义数据表
+    user_table = dynamodb.Table(USER_TABLE)
+
+    # 获取用户数据
+    response = user_table.get_item(Key={"uid": uid})
+    if "Item" in response:
+        return response["Item"].get("mistake", [])
+    else:
+        raise ValueError("Missing parameter")
+
+
 def lambda_handler(event, context):
     # 获取 HTTP 请求方法
     http_method = event["requestContext"]["http"]["method"]
@@ -262,6 +284,33 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Credentials": True,
                 },
                 "body": json.dumps({"message": "Success"}),
+            }
+        except ValueError as e:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": str(e)}),
+            }
+
+    # 获取错题
+    if event_type == "get_mistakes":
+        try:
+            uid = get_uid_from_cookie(event["cookies"])
+            mistakes = get_mistakes(uid)
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps(mistakes, default=str),
             }
         except ValueError as e:
             return {
