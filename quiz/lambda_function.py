@@ -123,7 +123,7 @@ def save_quiz(
 
 
 def save_mistake(
-    uid: int, question: str, user_answer: str, correct_answer: str
+    uid: int, question: str, user_answer: int, correct_answer: int
 ) -> None:
     """
     保存错题
@@ -134,7 +134,7 @@ def save_mistake(
     :param correct_answer: 正确答案
     """
     # 检查参数是否为空
-    if not uid or not question or not user_answer or not correct_answer:
+    if uid is None or not question or user_answer is None or correct_answer is None:
         raise ValueError("Missing parameter")
 
     # 定义数据表
@@ -155,6 +155,36 @@ def save_mistake(
     )
 
 
+def remove_mistake(uid: int, question: str) -> None:
+    """
+    移除错题
+
+    :param uid: 用户 ID
+    :param question: 题目
+    """
+    # 检查参数是否为空
+    if uid is None or not question:
+        raise ValueError("Missing parameter")
+
+    # 定义数据表
+    user_table = dynamodb.Table(USER_TABLE)
+
+    # 获取用户数据
+    response = user_table.get_item(Key={"uid": uid})
+    if "Item" in response:
+        mistakes = response["Item"].get("mistake", [])
+        # 移除指定错题
+        mistakes = [mistake for mistake in mistakes if mistake["question"] != question]
+        # 更新用户数据
+        user_table.update_item(
+            Key={"uid": uid},
+            UpdateExpression="SET mistake = :mistakes",
+            ExpressionAttributeValues={":mistakes": mistakes},
+        )
+    else:
+        raise ValueError("错题不存在")
+
+
 def get_mistakes(uid: int) -> list:
     """
     获取错题
@@ -163,7 +193,7 @@ def get_mistakes(uid: int) -> list:
     :return: 错题列表
     """
     # 检查参数是否为空
-    if not uid:
+    if uid is None:
         raise ValueError("Missing parameter")
 
     # 定义数据表
@@ -311,6 +341,35 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Credentials": True,
                 },
                 "body": json.dumps(mistakes, default=str),
+            }
+        except ValueError as e:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": str(e)}),
+            }
+
+    # 移除错题
+    if event_type == "remove_mistake":
+        try:
+            uid = get_uid_from_cookie(event["cookies"])
+            question = body.get("question", None)
+
+            remove_mistake(uid, question)
+            return {
+                "statusCode": 201,
+                "headers": {
+                    "Access-Control-Allow-Origin": FRONT_END_URL,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "content-type",
+                    "Access-Control-Allow-Credentials": True,
+                },
+                "body": json.dumps({"message": "Success"}),
             }
         except ValueError as e:
             return {

@@ -55,7 +55,7 @@ def get(uid: int) -> dict:
     :param uid: UID
     """
     # 检查参数是否为空
-    if not uid:
+    if uid is None:
         raise ValueError("Missing parameter")
 
     # 定义数据表
